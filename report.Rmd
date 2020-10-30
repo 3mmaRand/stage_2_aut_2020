@@ -1,0 +1,211 @@
+---
+title: "Prediction of dementia from MRI data"
+author: "Emma Rand"
+date: "28/10/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      warnings = FALSE)
+```
+
+
+```{r packages}
+library(tidyverse)
+library(GGally)
+library(caret)
+```
+
+# Introduction
+
+Dementia is a decline in mental ability which interferes with daily life. It describes a group of symptoms associated with a decline in memory and thinking skills. It is not a disease and there is not a single test to determine if a person has dementia. Instead, a combination of medical history, physical examination and mental acuity tests are used to diagnose dementia.
+
+# Data
+The data in [Oasis_longitudinal.csv](data-raw/oasis_longitudinal.csv) consists of a longitudinal collection of 150 subjects aged 60 to 96. Each subject was scanned on two or more visits, separated by at least one year for a total of 373 imaging sessions. For each subject, 3 or 4 individual T1-weighted MRI scans obtained in single scan sessions are included. The subjects are all right-handed and include both men and women. 72 of the subjects were characterized as nondemented throughout the study. 64 of the included subjects were characterized as demented at the time of their initial visits and remained so for subsequent scans, including 51 individuals with mild to moderate Alzheimer’s disease. Another 14 subjects were characterized as nondemented at the time of their initial visit and were subsequently characterized as demented at a later visit.
+
+```{r}
+# import data
+subjects <- read_csv("data-raw/oasis_longitudinal.csv") %>% 
+  select(-Hand) %>% 
+  janitor::clean_names()
+```
+
+
+## Variables
+
+There are `r dim(subjects)[5]` variables which are: 
+```{r}
+glimpse(subjects)
+```
+* group Converted / Demented / Nondemented
+* mr_delay - I think this is time since the MRI
+* m_f  - Gender
+* educ - Years of education
+* ses - Socioeconomic status as assessed by the Hollingshead Index of Social Position and classified into categories from 1 (highest status) to 5 (lowest status)
+* mmse - Mini-Mental State Examination score (range is from 0 = worst to 30 = best). Score greater than or equal to 24 points (out of 30) indicates a normal cognition. Below this, scores can indicate severe (≤9 points), moderate (10–18 points) or mild (19–23 points) cognitive impairment. 
+* cdr - Clinical Dementia Rating (0 = no dementia, 0.5 = very mild AD, 1 = mild AD, 2 = moderate AD)
+* e_tiv - Estimated total intracranial volume, mm3
+* n_wbv - Normalized whole-brain volume, expressed as a percent of all voxels in the atlas-masked image that are labeled as gray or white matter by the automated tissue segmentation process
+* asf - Atlas scaling factor (unitless). Computed scaling factor that transforms native-space brain and skull to the atlas target (i.e., the determinant of the transform matrix)
+
+
+Either group or cdr could be considered response variables. Hand is not informative and was dropped leaving 12 potential explanatory variables.
+```{r}
+# turn cdr into a factor
+subjects$cdr <- factor(subjects$cdr)
+
+
+```
+
+## Overview
+
+```{r}
+summary(subjects)
+```
+
+
+```{r}
+subjects <- subjects %>% 
+  filter(!is.na(mmse)) %>% 
+  filter(!is.na(ses))
+n_sub <- unique(subjects$subject_id) %>% length()
+```
+There are missing values in ses and mmse These were filtered out leaving `r n_sub` subjects.
+
+
+```{r}
+visits <- subjects %>% 
+  group_by(subject_id) %>% 
+  summarise(n_visit = length(subject_id)) %>% 
+  group_by(n_visit) %>% 
+  summarise(n_subjects = length(n_visit))
+```
+The majority of subjects, `r visits$n_subjects[visits$n_visit == 2]` had two visits with `r visits$n_subjects[visits$n_visit == 3]` having three.
+
+```{r}
+knitr::kable(visits)
+```
+Overview of distribution of variables and correlation between variables
+```{r}
+subjects %>%
+  select(-subject_id, -mri_id, -visit) %>% 
+  ggpairs()
+```
+
+
+# PCA
+Principal Components Analysis (PCA) is method to investigate whether you have groups or patterns in a dataset. It is a ‘data reduction’ or ‘dimension reduction’ method for continuous variables and creates a set of ‘components’ (axes) which are linear combinations of the original variables. PCA is useful when relatively few components are needed to capture most of the variation in the data.
+
+Scaling: When the values in one variable are much bigger than in others we usually scale all the variable (mean of zero and a unit variance) before undertaking PCA to avoid the variable with the biggest values dominating the analysis. To see the variance accounted for by each component
+
+```{r}
+pca <- subjects %>%
+  select(-subject_id, -mri_id, -visit, -group, -m_f, -cdr) %>%  
+  prcomp(scale. = TRUE)
+```
+
+
+```{r}
+summary(pca)
+```
+
+Three principal components capture 69% of the variation in the data.
+To plot, we might want to use the scores on each of the new axes and colour them by species. The scores are in a variable called $x
+
+```{r}
+# For convenience, I'll put these in one 'tidy' dataframe
+# and add some labels
+pca_labelled <- data.frame(pca$x, 
+                           cdr = subjects$cdr,
+                           group = subjects$group,
+                           m_f = subjects$m_f)
+```
+
+```{r}
+# a then to do a scatterplot of the first two pc colour by cdr score
+ggplot(pca_labelled, aes(x = PC1, y = PC2, color = cdr)) +
+  geom_point() +
+  facet_grid(. ~ group)
+```
+
+```{r}
+# and by group
+ggplot(pca_labelled, aes(x = PC1, y = PC2, color = group)) +
+  geom_point() +
+  facet_grid(. ~ m_f)
+```
+Separation of groups isn't clear - though perhaps lower PC2 scores are associated with dementia.
+
+# LDA
+Linear Discriminant Analysis also works with the continous variables and aims to find linear combination of variables the maximise differences between groups. It is supervised because we label observations by their class and determine the allocation rules based on these. A ‘discriminant’ is a line that separates groups. As there are three classes we have at most two linear discriminants. the lda() function is in a package called MASS. I very rarely load MASS with a library command since it has a function called select that conflicts with dplyr’s select(). Thus I will use MASS:: to access its functions.
+
+```{r}
+lda <- subjects %>%
+  select(-subject_id, -mri_id, -visit, -group, -m_f, -cdr) %>%  
+  MASS::lda(grouping = subjects$cdr)
+```
+
+To determine how well the species were predicted the scores on LD1 and LD2 and the classes need to be predicted:
+
+```{r}
+plda <- subjects %>%
+  select(-subject_id, -mri_id, -visit, -group, -m_f, -cdr) %>%  
+  predict(object = lda)
+
+```
+How many predicted classes are the same as the actual classes:
+```{r}
+table(predicted = plda$class, observed = subjects$cdr)
+```
+
+The correct predictions are on the leading diagonal. So 202 of the 0 were correctly predicted but 4 were misclassified as 0.5. 62 of the 0.5 were misclassified as 0.
+
+What are the most important errors?
+
+We can create a scatter plot of LD1 and LD2 just like we did for PC1 and PC2:
+
+## Training and Testing
+We used the same data to train the LDA model as we used to examine its performance. Only seven cases were in correctly classified. But this isn’t very robust - we could have overfitting.
+
+A key part of using ML methods to make predictions is to test how good those predictions are. This is typically done by training the model on about 75% of your data and then testing it on the remainder.
+
+The caret package includes functions to help with this (as well as lots of ML algorithms). The name comes from Classification And REgression Training
+
+Split the dataset in to training and testing sets using createDataPartition()
+
+It returns a proportion of row numbers randomly sampled from the dataframe. Since it returns a list (of one item) I’ve added [[1]] to select that list element so I have a vector to work with.
+```{r}
+ids <- createDataPartition(y = subjects$cdr, p = 0.75)[[1]]
+str(ids)
+```
+
+Now use those row numbers to create the training and test datasets.
+```{r}
+train <- subjects[ids,]
+test <- subjects[-ids,] # without those rows
+```
+
+Perform the lda on the training data and test on the test data
+
+```{r}
+# train
+lda <- train %>%
+  select(-subject_id, -mri_id, -visit, -group, -m_f, -cdr) %>%  
+  MASS::lda(grouping = train$cdr)
+
+```
+
+```{r}
+plda <- test %>% 
+  select(-subject_id, -mri_id, -visit, -group, -m_f, -cdr) %>%  
+  predict(object = lda)
+```
+
+Evaluate the model performance by comparing the predicted classes to the actual classes.
+```{r}
+# compare the predicted classes the actual classes
+table(predicted = plda$class, observed = test$cdr)
+```
+It's the observed 0.5 which are hardest to predict. We can also see that in the PCA.
