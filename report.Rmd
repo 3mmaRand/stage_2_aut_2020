@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE,
                       warnings = FALSE)
 ```
 
+short cut for insert is control-alt-i
 
 ```{r packages}
 library(tidyverse)
@@ -35,12 +36,12 @@ subjects <- read_csv("data-raw/oasis_longitudinal.csv") %>%
 
 ## Variables
 
-There are `r dim(subjects)[5]` variables which are: 
+There are `r dim(subjects)[2]` variables which are: 
 ```{r}
 glimpse(subjects)
 ```
 * group Converted / Demented / Nondemented
-* mr_delay - I think this is time since the MRI
+* mr_delay - I think this is time since the MRI?
 * m_f  - Gender
 * educ - Years of education
 * ses - Socioeconomic status as assessed by the Hollingshead Index of Social Position and classified into categories from 1 (highest status) to 5 (lowest status)
@@ -51,12 +52,10 @@ glimpse(subjects)
 * asf - Atlas scaling factor (unitless). Computed scaling factor that transforms native-space brain and skull to the atlas target (i.e., the determinant of the transform matrix)
 
 
-Either group or cdr could be considered response variables. Hand is not informative and was dropped leaving 12 potential explanatory variables.
+Either group or cdr could be considered response variables. Hand is not informative and was dropped leaving 12 potential explanatory variables. Or mmse
 ```{r}
 # turn cdr into a factor
 subjects$cdr <- factor(subjects$cdr)
-
-
 ```
 
 ## Overview
@@ -93,16 +92,25 @@ subjects %>%
   select(-subject_id, -mri_id, -visit) %>% 
   ggpairs()
 ```
-
+NOte: ASF and e_tiv are strongly colinear - therefore use just e_tiv
 
 # PCA
 Principal Components Analysis (PCA) is method to investigate whether you have groups or patterns in a dataset. It is a ‘data reduction’ or ‘dimension reduction’ method for continuous variables and creates a set of ‘components’ (axes) which are linear combinations of the original variables. PCA is useful when relatively few components are needed to capture most of the variation in the data.
 
-Scaling: When the values in one variable are much bigger than in others we usually scale all the variable (mean of zero and a unit variance) before undertaking PCA to avoid the variable with the biggest values dominating the analysis. To see the variance accounted for by each component
+Scaling: When the values in one variable are much bigger than in others we usually scale all the variable (mean of zero and a unit variance) before undertaking PCA to avoid the variable with the biggest values dominating the analysis. To see the variance accounted for by each component.
+
+We only include the numeric variables: "age"   "educ"  "ses"   "mmse"  "e_tiv" "n_wbv".
+cdr is excluded because it's the response
+subject_id, mri_id, are excluded because they just id the observation
+visit is excluded because it is not informative
+group is excluded because it is not informative and collects potentially meaningful observations
+m_f is excluded because it is categorical so not suitable to PCA and LDA. It can be use in other methods.
+
+Note, we only have 6 variables here: often PCA is carried out on many more variables
 
 ```{r}
 pca <- subjects %>%
-  select(-subject_id, -mri_id, -visit, -group, -m_f, -cdr) %>%  
+  select(age, educ, ses, mmse, e_tiv, n_wbv) %>% 
   prcomp(scale. = TRUE)
 ```
 
@@ -111,7 +119,7 @@ pca <- subjects %>%
 summary(pca)
 ```
 
-Three principal components capture 69% of the variation in the data.
+Three principal components capture 77% of the variation in the data.
 To plot, we might want to use the scores on each of the new axes and colour them by species. The scores are in a variable called $x
 
 ```{r}
@@ -119,20 +127,20 @@ To plot, we might want to use the scores on each of the new axes and colour them
 # and add some labels
 pca_labelled <- data.frame(pca$x, 
                            cdr = subjects$cdr,
-                           group = subjects$group,
                            m_f = subjects$m_f)
 ```
 
 ```{r}
 # a then to do a scatterplot of the first two pc colour by cdr score
 ggplot(pca_labelled, aes(x = PC1, y = PC2, color = cdr)) +
-  geom_point() +
-  facet_grid(. ~ group)
+  geom_point() 
 ```
+There's not as much separation as we might expect though a cdr of 0 seems to be associated with lower scores on PC2. There are very few blue/green/purple scores below PC2 = 0 
+
 
 ```{r}
-# and by group
-ggplot(pca_labelled, aes(x = PC1, y = PC2, color = group)) +
+# and by sex
+ggplot(pca_labelled, aes(x = PC1, y = PC2, color = cdr)) +
   geom_point() +
   facet_grid(. ~ m_f)
 ```
@@ -143,7 +151,7 @@ Linear Discriminant Analysis also works with the continous variables and aims to
 
 ```{r}
 lda <- subjects %>%
-  select(-subject_id, -mri_id, -visit, -group, -m_f, -cdr) %>%  
+  select(age, educ, ses, mmse, e_tiv, n_wbv) %>%  
   MASS::lda(grouping = subjects$cdr)
 ```
 
@@ -151,7 +159,7 @@ To determine how well the species were predicted the scores on LD1 and LD2 and t
 
 ```{r}
 plda <- subjects %>%
-  select(-subject_id, -mri_id, -visit, -group, -m_f, -cdr) %>%  
+  select(age, educ, ses, mmse, e_tiv, n_wbv) %>%  
   predict(object = lda)
 
 ```
@@ -160,7 +168,7 @@ How many predicted classes are the same as the actual classes:
 table(predicted = plda$class, observed = subjects$cdr)
 ```
 
-The correct predictions are on the leading diagonal. So 202 of the 0 were correctly predicted but 4 were misclassified as 0.5. 62 of the 0.5 were misclassified as 0.
+The correct predictions are on the leading diagonal. So 201 of the 0 were correctly predicted but 5 were misclassified as 0.5. 62 of the 0.5 were misclassified as 0.
 
 What are the most important errors?
 
@@ -192,14 +200,14 @@ Perform the lda on the training data and test on the test data
 ```{r}
 # train
 lda <- train %>%
-  select(-subject_id, -mri_id, -visit, -group, -m_f, -cdr) %>%  
+  select(age, educ, ses, mmse, e_tiv, n_wbv) %>%  
   MASS::lda(grouping = train$cdr)
 
 ```
 
 ```{r}
 plda <- test %>% 
-  select(-subject_id, -mri_id, -visit, -group, -m_f, -cdr) %>%  
+  select(age, educ, ses, mmse, e_tiv, n_wbv) %>%  
   predict(object = lda)
 ```
 
