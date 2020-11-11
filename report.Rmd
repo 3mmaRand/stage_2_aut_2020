@@ -119,6 +119,14 @@ pca <- subjects %>%
 summary(pca)
 ```
 
+```{r}
+subjects %>% 
+  ggplot(aes(x = age, y =e_tiv, colour = cdr)) +
+  geom_jitter()
+```
+
+
+
 Three principal components capture 77% of the variation in the data.
 To plot, we might want to use the scores on each of the new axes and colour them by species. The scores are in a variable called $x
 
@@ -129,10 +137,11 @@ pca_labelled <- data.frame(pca$x,
                            cdr = subjects$cdr,
                            m_f = subjects$m_f)
 ```
-
+View(pca$x)
 ```{r}
 # a then to do a scatterplot of the first two pc colour by cdr score
-ggplot(pca_labelled, aes(x = PC1, y = PC2, color = cdr)) +
+ggplot(pca_labelled,
+       aes(x = PC2, y = PC3, color = cdr)) +
   geom_point() 
 ```
 There's not as much separation as we might expect though a cdr of 0 seems to be associated with lower scores on PC2. There are very few blue/green/purple scores below PC2 = 0 
@@ -140,7 +149,7 @@ There's not as much separation as we might expect though a cdr of 0 seems to be 
 
 ```{r}
 # and by sex
-ggplot(pca_labelled, aes(x = PC1, y = PC2, color = cdr)) +
+ggplot(pca_labelled, aes(x = PC2, y = PC3, color = cdr)) +
   geom_point() +
   facet_grid(. ~ m_f)
 ```
