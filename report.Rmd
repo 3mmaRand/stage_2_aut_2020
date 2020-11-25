@@ -174,7 +174,8 @@ plda <- subjects %>%
 ```
 How many predicted classes are the same as the actual classes:
 ```{r}
-table(predicted = plda$class, observed = subjects$cdr)
+confusionMatrix(plda$class, subjects$cdr)
+
 ```
 
 The correct predictions are on the leading diagonal. So 201 of the 0 were correctly predicted but 5 were misclassified as 0.5. 62 of the 0.5 were misclassified as 0.
@@ -200,8 +201,8 @@ str(ids)
 
 Now use those row numbers to create the training and test datasets.
 ```{r}
-train <- subjects[ids,]
-test <- subjects[-ids,] # without those rows
+train <- subjects %>% slice(ids)
+test <- subjects %>% slice(-ids)
 ```
 
 Perform the lda on the training data and test on the test data
@@ -222,7 +223,72 @@ plda <- test %>%
 
 Evaluate the model performance by comparing the predicted classes to the actual classes.
 ```{r}
-# compare the predicted classes the actual classes
-table(predicted = plda$class, observed = test$cdr)
+confusionMatrix(plda$class, test$cdr)
+
 ```
 It's the observed 0.5 which are hardest to predict. We can also see that in the PCA.
+
+# Random Forest
+
+Another supervised learning method. It generates a re large number of decision trees each constructed from a different subset of the training data. The decision trees are then used to create a classification consensus.
+
+It can cope with both continuous and categorical predictors.
+We again partition our dataset in to training and testing components.
+```{r}
+ids <- createDataPartition(subjects$cdr, 
+                             p = .75,
+                             list = F)
+training <- subjects %>%
+  slice(ids) %>%
+  select(age,
+         educ,
+         ses,
+         mmse,
+         e_tiv,
+         n_wbv,
+         m_f,
+         cdr)
+testing <- subjects %>%
+  slice(-ids) %>%
+  select(age,
+         educ,
+         ses,
+         mmse,
+         e_tiv,
+         n_wbv,
+         m_f,
+         cdr)
+
+```
+
+Train the model
+
+```{r}
+library(randomForest)
+rf_classifier <- randomForest(cdr ~ ., 
+                             data = training,
+                             ntree = 200,
+                             mtry = 3,
+                             importance = TRUE)
+
+rf_classifier
+```
+OOB (Out-of-bag) estimate of error rate: number of incorrectly classified / number observations (i.e, counterpart to accuracy)
+
+Important of each variable:
+
+```{r}
+varImpPlot(rf_classifier)
+```
+
+MeanDecreaseAccuracy - loss of prediction performance when a that variable is excluded.
+MeanDecreaseGin - GINI is a measure of node impurity. It indicates how good that variable is for classifying the data.
+
+Confusion matrix.
+```{r}
+prediction_for_table <- predict(rf_classifier,testing[,-8])
+confusionMatrix(prediction_for_table, test$cdr)
+```
+
+
+
