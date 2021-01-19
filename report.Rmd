@@ -3,6 +3,9 @@ title: "Prediction of dementia from MRI data"
 author: "Emma Rand"
 date: "28/10/2020"
 output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
 ---
 
 ```{r setup, include=FALSE}
@@ -21,10 +24,28 @@ library(caret)
 
 # Introduction
 
-Dementia is a decline in mental ability which interferes with daily life. It describes a group of symptoms associated with a decline in memory and thinking skills. It is not a disease and there is not a single test to determine if a person has dementia. Instead, a combination of medical history, physical examination and mental acuity tests are used to diagnose dementia.
+**Dementia** is a decline in mental ability which interferes with daily
+life. It describes a group of symptoms associated with a decline in
+memory and thinking skills. It is not a disease and there is not a
+single test to determine if a person has dementia. Instead, a
+combination of medical history, physical examination and mental acuity
+tests are used to diagnose dementia.
 
 # Data
-The data in [Oasis_longitudinal.csv](data-raw/oasis_longitudinal.csv) consists of a longitudinal collection of 150 subjects aged 60 to 96. Each subject was scanned on two or more visits, separated by at least one year for a total of 373 imaging sessions. For each subject, 3 or 4 individual T1-weighted MRI scans obtained in single scan sessions are included. The subjects are all right-handed and include both men and women. 72 of the subjects were characterized as nondemented throughout the study. 64 of the included subjects were characterized as demented at the time of their initial visits and remained so for subsequent scans, including 51 individuals with mild to moderate Alzheimer’s disease. Another 14 subjects were characterized as nondemented at the time of their initial visit and were subsequently characterized as demented at a later visit.
+
+The data in [Oasis_longitudinal.csv](data-raw/oasis_longitudinal.csv)
+consists of a longitudinal collection of 150 subjects aged 60 to 96.
+Each subject was scanned on two or more visits, separated by at least
+one year for a total of 373 imaging sessions. For each subject, 3 or 4
+individual T1-weighted MRI scans obtained in single scan sessions are
+included. The subjects are all right-handed and include both men and
+women. 72 of the subjects were characterized as nondemented throughout
+the study. 64 of the included subjects were characterized as demented at
+the time of their initial visits and remained so for subsequent scans,
+including 51 individuals with mild to moderate Alzheimer's disease.
+Another 14 subjects were characterized as nondemented at the time of
+their initial visit and were subsequently characterized as demented at a
+later visit.
 
 ```{r}
 # import data
@@ -33,26 +54,40 @@ subjects <- read_csv("data-raw/oasis_longitudinal.csv") %>%
   janitor::clean_names()
 ```
 
-
 ## Variables
 
-There are `r dim(subjects)[2]` variables which are: 
+There are `r dim(subjects)[2]` variables which are:
+
 ```{r}
 glimpse(subjects)
 ```
-* group Converted / Demented / Nondemented
-* mr_delay - I think this is time since the MRI?
-* m_f  - Gender
-* educ - Years of education
-* ses - Socioeconomic status as assessed by the Hollingshead Index of Social Position and classified into categories from 1 (highest status) to 5 (lowest status)
-* mmse - Mini-Mental State Examination score (range is from 0 = worst to 30 = best). Score greater than or equal to 24 points (out of 30) indicates a normal cognition. Below this, scores can indicate severe (≤9 points), moderate (10–18 points) or mild (19–23 points) cognitive impairment. 
-* cdr - Clinical Dementia Rating (0 = no dementia, 0.5 = very mild AD, 1 = mild AD, 2 = moderate AD)
-* e_tiv - Estimated total intracranial volume, mm3
-* n_wbv - Normalized whole-brain volume, expressed as a percent of all voxels in the atlas-masked image that are labeled as gray or white matter by the automated tissue segmentation process
-* asf - Atlas scaling factor (unitless). Computed scaling factor that transforms native-space brain and skull to the atlas target (i.e., the determinant of the transform matrix)
 
+-   group Converted / Demented / Nondemented
+-   mr_delay - I think this is time since the MRI?
+-   m_f - Gender
+-   educ - Years of education
+-   ses - Socioeconomic status as assessed by the Hollingshead Index of
+    Social Position and classified into categories from 1 (highest
+    status) to 5 (lowest status)
+-   mmse - Mini-Mental State Examination score (range is from 0 = worst
+    to 30 = best). Score greater than or equal to 24 points (out of 30)
+    indicates a normal cognition. Below this, scores can indicate severe
+    (≤9 points), moderate (10--18 points) or mild (19--23 points)
+    cognitive impairment.
+-   cdr - Clinical Dementia Rating (0 = no dementia, 0.5 = very mild AD,
+    1 = mild AD, 2 = moderate AD)
+-   e_tiv - Estimated total intracranial volume, mm3
+-   n_wbv - Normalized whole-brain volume, expressed as a percent of all
+    voxels in the atlas-masked image that are labeled as gray or white
+    matter by the automated tissue segmentation process
+-   asf - Atlas scaling factor (unitless). Computed scaling factor that
+    transforms native-space brain and skull to the atlas target (i.e.,
+    the determinant of the transform matrix)
 
-Either group or cdr could be considered response variables. Hand is not informative and was dropped leaving 12 potential explanatory variables. Or mmse
+Either group or cdr could be considered response variables. Hand is not
+informative and was dropped leaving 12 potential explanatory variables.
+Or mmse
+
 ```{r}
 # turn cdr into a factor
 subjects$cdr <- factor(subjects$cdr)
@@ -64,15 +99,15 @@ subjects$cdr <- factor(subjects$cdr)
 summary(subjects)
 ```
 
-
 ```{r}
 subjects <- subjects %>% 
   filter(!is.na(mmse)) %>% 
   filter(!is.na(ses))
 n_sub <- unique(subjects$subject_id) %>% length()
 ```
-There are missing values in ses and mmse These were filtered out leaving `r n_sub` subjects.
 
+There are missing values in ses and mmse These were filtered out leaving
+`r n_sub` subjects.
 
 ```{r}
 visits <- subjects %>% 
@@ -81,32 +116,49 @@ visits <- subjects %>%
   group_by(n_visit) %>% 
   summarise(n_subjects = length(n_visit))
 ```
-The majority of subjects, `r visits$n_subjects[visits$n_visit == 2]` had two visits with `r visits$n_subjects[visits$n_visit == 3]` having three.
+
+The majority of subjects, `r visits$n_subjects[visits$n_visit == 2]` had
+two visits with `r visits$n_subjects[visits$n_visit == 3]` having three.
 
 ```{r}
 knitr::kable(visits)
 ```
+
 Overview of distribution of variables and correlation between variables
+
 ```{r}
 subjects %>%
   select(-subject_id, -mri_id, -visit) %>% 
   ggpairs()
 ```
+
 NOte: ASF and e_tiv are strongly colinear - therefore use just e_tiv
 
 # PCA
-Principal Components Analysis (PCA) is method to investigate whether you have groups or patterns in a dataset. It is a ‘data reduction’ or ‘dimension reduction’ method for continuous variables and creates a set of ‘components’ (axes) which are linear combinations of the original variables. PCA is useful when relatively few components are needed to capture most of the variation in the data.
 
-Scaling: When the values in one variable are much bigger than in others we usually scale all the variable (mean of zero and a unit variance) before undertaking PCA to avoid the variable with the biggest values dominating the analysis. To see the variance accounted for by each component.
+Principal Components Analysis (PCA) is method to investigate whether you
+have groups or patterns in a dataset. It is a 'data reduction' or
+'dimension reduction' method for continuous variables and creates a set
+of 'components' (axes) which are linear combinations of the original
+variables. PCA is useful when relatively few components are needed to
+capture most of the variation in the data.
 
-We only include the numeric variables: "age"   "educ"  "ses"   "mmse"  "e_tiv" "n_wbv".
-cdr is excluded because it's the response
-subject_id, mri_id, are excluded because they just id the observation
-visit is excluded because it is not informative
-group is excluded because it is not informative and collects potentially meaningful observations
-m_f is excluded because it is categorical so not suitable to PCA and LDA. It can be use in other methods.
+Scaling: When the values in one variable are much bigger than in others
+we usually scale all the variable (mean of zero and a unit variance)
+before undertaking PCA to avoid the variable with the biggest values
+dominating the analysis. To see the variance accounted for by each
+component.
 
-Note, we only have 6 variables here: often PCA is carried out on many more variables
+We only include the numeric variables: "age" "educ" "ses" "mmse" "e_tiv"
+"n_wbv". cdr is excluded because it's the response subject_id, mri_id,
+are excluded because they just id the observation visit is excluded
+because it is not informative group is excluded because it is not
+informative and collects potentially meaningful observations m_f is
+excluded because it is categorical so not suitable to PCA and LDA. It
+can be use in other methods.
+
+Note, we only have 6 variables here: often PCA is carried out on many
+more variables
 
 ```{r}
 pca <- subjects %>%
@@ -114,21 +166,19 @@ pca <- subjects %>%
   prcomp(scale. = TRUE)
 ```
 
-
 ```{r}
 summary(pca)
 ```
 
 ```{r}
 subjects %>% 
-  ggplot(aes(x = age, y =e_tiv, colour = cdr)) +
+  ggplot(aes(x = age, y = e_tiv, colour = cdr)) +
   geom_jitter()
 ```
 
-
-
-Three principal components capture 77% of the variation in the data.
-To plot, we might want to use the scores on each of the new axes and colour them by species. The scores are in a variable called $x
+Three principal components capture 77% of the variation in the data. To
+plot, we might want to use the scores on each of the new axes and colour
+them by species. The scores are in a variable called \$x
 
 ```{r}
 # For convenience, I'll put these in one 'tidy' dataframe
@@ -137,15 +187,19 @@ pca_labelled <- data.frame(pca$x,
                            cdr = subjects$cdr,
                            m_f = subjects$m_f)
 ```
-View(pca$x)
+
+View(pca\$x)
+
 ```{r}
 # a then to do a scatterplot of the first two pc colour by cdr score
 ggplot(pca_labelled,
-       aes(x = PC2, y = PC3, color = cdr)) +
+       aes(x = PC1, y = PC2, color = cdr)) +
   geom_point() 
 ```
-There's not as much separation as we might expect though a cdr of 0 seems to be associated with lower scores on PC2. There are very few blue/green/purple scores below PC2 = 0 
 
+There's not as much separation as we might expect though a cdr of 0
+seems to be associated with lower scores on PC2. There are very few
+blue/green/purple scores below PC2 = 0
 
 ```{r}
 # and by sex
@@ -153,18 +207,33 @@ ggplot(pca_labelled, aes(x = PC2, y = PC3, color = cdr)) +
   geom_point() +
   facet_grid(. ~ m_f)
 ```
-Separation of groups isn't clear - though perhaps lower PC2 scores are associated with dementia.
+
+Separation of groups isn't clear - though perhaps lower PC2 scores are
+associated with dementia.
 
 # LDA
-Linear Discriminant Analysis also works with the continous variables and aims to find linear combination of variables the maximise differences between groups. It is supervised because we label observations by their class and determine the allocation rules based on these. A ‘discriminant’ is a line that separates groups. As there are three classes we have at most two linear discriminants. the lda() function is in a package called MASS. I very rarely load MASS with a library command since it has a function called select that conflicts with dplyr’s select(). Thus I will use MASS:: to access its functions.
+
+Linear Discriminant Analysis also works with the continous variables and
+aims to find linear combination of variables the maximise differences
+between groups. It is supervised because we label observations by their
+class and determine the allocation rules based on these. A
+'discriminant' is a line that separates groups. As there are three
+classes we have at most two linear discriminants. the lda() function is
+in a package called MASS. I very rarely load MASS with a library command
+since it has a function called select that conflicts with dplyr's
+select(). Thus I will use MASS:: to access its functions.
 
 ```{r}
 lda <- subjects %>%
   select(age, educ, ses, mmse, e_tiv, n_wbv) %>%  
   MASS::lda(grouping = subjects$cdr)
+
+
+
 ```
 
-To determine how well the species were predicted the scores on LD1 and LD2 and the classes need to be predicted:
+To determine how well the species were predicted the scores on LD1 and
+LD2 and the classes need to be predicted:
 
 ```{r}
 plda <- subjects %>%
@@ -172,34 +241,97 @@ plda <- subjects %>%
   predict(object = lda)
 
 ```
+
 How many predicted classes are the same as the actual classes:
+
 ```{r}
 confusionMatrix(plda$class, subjects$cdr)
 
 ```
+```{r}
 
-The correct predictions are on the leading diagonal. So 201 of the 0 were correctly predicted but 5 were misclassified as 0.5. 62 of the 0.5 were misclassified as 0.
+# Confusion Matrix and Statistics
+# 
+#           Reference
+# Prediction   0 0.5   1   2
+#        0   201  62   3   1
+#        0.5   5  36   8   0
+#        1     0  11  24   1
+#        2     0   1   0   1
+
+total <-  354
+correct <- 201 + 36 + 24 + 1
+commonest <- max(table(subjects$cdr))
+# accuracy
+acc <- correct/total
+
+# 95% CI
+binom.test(x = correct, n = total, p = 0.74)
+
+
+#no info rate
+nir <- commonest / total
+
+# P-Value [Acc > NIR]
+binom.test(x = correct, n = total, p = nir, alternative = "greater")
+
+#sensitivity
+# proportion true positive
+201/206
+
+
+#specificity
+# proportion true negative
+(36 + 8 + 0 + 11 + 24 + 1 + 1 + 0 + 1)/(total - 206)
+
+
+# Pos Pred Value 
+# prob of being class given predicted that class
+205/206
+
+```
+
+
+
+
+
+The correct predictions are on the leading diagonal. So 201 of the 0
+were correctly predicted but 5 were misclassified as 0.5. 62 of the 0.5
+were misclassified as 0.
 
 What are the most important errors?
 
-We can create a scatter plot of LD1 and LD2 just like we did for PC1 and PC2:
+We can create a scatter plot of LD1 and LD2 just like we did for PC1 and
+PC2:
 
 ## Training and Testing
-We used the same data to train the LDA model as we used to examine its performance. Only seven cases were in correctly classified. But this isn’t very robust - we could have overfitting.
 
-A key part of using ML methods to make predictions is to test how good those predictions are. This is typically done by training the model on about 75% of your data and then testing it on the remainder.
+We used the same data to train the LDA model as we used to examine its
+performance. Only seven cases were in correctly classified. But this
+isn't very robust - we could have overfitting.
 
-The caret package includes functions to help with this (as well as lots of ML algorithms). The name comes from Classification And REgression Training
+A key part of using ML methods to make predictions is to test how good
+those predictions are. This is typically done by training the model on
+about 75% of your data and then testing it on the remainder.
 
-Split the dataset in to training and testing sets using createDataPartition()
+The caret package includes functions to help with this (as well as lots
+of ML algorithms). The name comes from Classification And REgression
+Training
 
-It returns a proportion of row numbers randomly sampled from the dataframe. Since it returns a list (of one item) I’ve added [[1]] to select that list element so I have a vector to work with.
+Split the dataset in to training and testing sets using
+createDataPartition()
+
+It returns a proportion of row numbers randomly sampled from the
+dataframe. Since it returns a list (of one item) I've added [[1]] to
+select that list element so I have a vector to work with.
+
 ```{r}
-ids <- createDataPartition(y = subjects$cdr, p = 0.75)[[1]]
+ids <- createDataPartition(y = subjects$cdr, p = 0.75, list = FALSE)
 str(ids)
 ```
 
 Now use those row numbers to create the training and test datasets.
+
 ```{r}
 train <- subjects %>% slice(ids)
 test <- subjects %>% slice(-ids)
@@ -221,19 +353,27 @@ plda <- test %>%
   predict(object = lda)
 ```
 
-Evaluate the model performance by comparing the predicted classes to the actual classes.
+Evaluate the model performance by comparing the predicted classes to the
+actual classes.
+
 ```{r}
 confusionMatrix(plda$class, test$cdr)
 
 ```
-It's the observed 0.5 which are hardest to predict. We can also see that in the PCA.
+
+It's the observed 0.5 which are hardest to predict. We can also see that
+in the PCA.
 
 # Random Forest
 
-Another supervised learning method. It generates a re large number of decision trees each constructed from a different subset of the training data. The decision trees are then used to create a classification consensus.
+Another supervised learning method. It generates a re large number of
+decision trees each constructed from a different subset of the training
+data. The decision trees are then used to create a classification
+consensus.
 
-It can cope with both continuous and categorical predictors.
-We again partition our dataset in to training and testing components.
+It can cope with both continuous and categorical predictors. We again
+partition our dataset in to training and testing components.
+
 ```{r}
 ids <- createDataPartition(subjects$cdr, 
                              p = .75,
@@ -273,7 +413,9 @@ rf_classifier <- randomForest(cdr ~ .,
 
 rf_classifier
 ```
-OOB (Out-of-bag) estimate of error rate: number of incorrectly classified / number observations (i.e, counterpart to accuracy)
+
+OOB (Out-of-bag) estimate of error rate: number of incorrectly
+classified / number observations (i.e, counterpart to accuracy)
 
 Important of each variable:
 
@@ -281,14 +423,14 @@ Important of each variable:
 varImpPlot(rf_classifier)
 ```
 
-MeanDecreaseAccuracy - loss of prediction performance when a that variable is excluded.
-MeanDecreaseGin - GINI is a measure of node impurity. It indicates how good that variable is for classifying the data.
+MeanDecreaseAccuracy - loss of prediction performance when a that
+variable is excluded. MeanDecreaseGin - GINI is a measure of node
+impurity. It indicates how good that variable is for classifying the
+data.
 
 Confusion matrix.
+
 ```{r}
 prediction_for_table <- predict(rf_classifier,testing[,-8])
 confusionMatrix(prediction_for_table, test$cdr)
 ```
-
-
-
