@@ -19,7 +19,7 @@ short cut for insert is control-alt-i
 ```{r packages}
 library(tidyverse)
 library(GGally)
-library(caret)
+library(caret) # needed for the confusion matrix
 ```
 
 # Introduction
@@ -88,6 +88,10 @@ Either group or cdr could be considered response variables. Hand is not
 informative and was dropped leaving 12 potential explanatory variables.
 Or mmse
 
+
+
+
+
 ```{r}
 # turn cdr into a factor
 subjects$cdr <- factor(subjects$cdr)
@@ -98,6 +102,7 @@ subjects$cdr <- factor(subjects$cdr)
 ```{r}
 summary(subjects)
 ```
+
 
 ```{r}
 subjects <- subjects %>% 
@@ -117,6 +122,35 @@ visits <- subjects %>%
   summarise(n_subjects = length(n_visit))
 ```
 
+```{r}
+visits %>% 
+  ggplot(aes(x = n_visit, n_subjects)) +
+  geom_col()
+```
+```{r}
+
+subjects %>% filter(visit == 1) %>% 
+  ggplot(aes(x = age)) +
+  geom_density() +
+  facet_grid(. ~m_f)
+
+```
+
+
+```{r}
+subjects %>% group_by(m_f) %>% 
+  summarise(mean_age = mean(age),
+            n = length(age),
+            mean_e_tiv = mean(e_tiv),
+            mean_mmse = mean(mmse),
+            mean_n_wbv = mean(n_wbv))
+```
+```{r}
+subjects %>% ggplot(aes(x = ses)) + geom_bar()
+```
+
+
+
 The majority of subjects, `r visits$n_subjects[visits$n_visit == 2]` had
 two visits with `r visits$n_subjects[visits$n_visit == 3]` having three.
 
@@ -126,10 +160,10 @@ knitr::kable(visits)
 
 Overview of distribution of variables and correlation between variables
 
-```{r}
+```{r message=FALSE}
 subjects %>%
   select(-subject_id, -mri_id, -visit) %>% 
-  ggpairs()
+  ggpairs(aes(color = cdr))
 ```
 
 NOte: ASF and e_tiv are strongly colinear - therefore use just e_tiv
@@ -168,12 +202,14 @@ pca <- subjects %>%
 
 ```{r}
 summary(pca)
+
+pca
 ```
 
 ```{r}
 subjects %>% 
   ggplot(aes(x = age, y = e_tiv, colour = cdr)) +
-  geom_jitter()
+  geom_point()
 ```
 
 Three principal components capture 77% of the variation in the data. To
@@ -188,7 +224,7 @@ pca_labelled <- data.frame(pca$x,
                            m_f = subjects$m_f)
 ```
 
-View(pca\$x)
+
 
 ```{r}
 # a then to do a scatterplot of the first two pc colour by cdr score
@@ -213,7 +249,7 @@ associated with dementia.
 
 # LDA
 
-Linear Discriminant Analysis also works with the continous variables and
+Linear Discriminant Analysis also works with the continuous variables and
 aims to find linear combination of variables the maximise differences
 between groups. It is supervised because we label observations by their
 class and determine the allocation rules based on these. A
@@ -232,7 +268,7 @@ lda <- subjects %>%
 
 ```
 
-To determine how well the species were predicted the scores on LD1 and
+To determine how well the classes were predicted the scores on LD1 and
 LD2 and the classes need to be predicted:
 
 ```{r}
@@ -245,9 +281,16 @@ plda <- subjects %>%
 How many predicted classes are the same as the actual classes:
 
 ```{r}
-confusionMatrix(plda$class, subjects$cdr)
+mat <- confusionMatrix(plda$class, subjects$cdr)
 
+
+mat
 ```
+
+
+
+
+
 ```{r}
 
 # Confusion Matrix and Statistics
@@ -433,4 +476,21 @@ Confusion matrix.
 ```{r}
 prediction_for_table <- predict(rf_classifier,testing[,-8])
 confusionMatrix(prediction_for_table, test$cdr)
+```
+
+randomForestExplainer
+
+```{r}
+# library(randomForestExplainer)
+# explain_forest(rf_classifier, interactions = TRUE, data = training)
+```
+
+
+Plotting trees from Random Forest models with ggraph
+
+```{r}
+```
+
+
+```{r}
 ```
